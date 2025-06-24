@@ -1,114 +1,89 @@
-const { Telegraf, Markup } = require('telegraf');
-const fs = require('fs');
+const { Telegraf } = require('telegraf');
 const axios = require('axios');
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const bot = new Telegraf(BOT_TOKEN);
+const express = require('express');
+const app = express();
 
-const DATA_FILE = 'data.json';
-const PORT = process.env.PORT || 3000;
+const bot = new Telegraf(process.env.BOT_TOKEN);
+const lands = {};
 
-function loadData() {
-    if (!fs.existsSync(DATA_FILE)) return {};
-    return JSON.parse(fs.readFileSync(DATA_FILE));
-}
-
-function saveData(data) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-
-const userState = new Map();
-const tempData = new Map();
+let currentAction = null;
+let tempName = '';
 
 bot.start((ctx) => {
-    ctx.reply('Выберите команду:', Markup.keyboard([
-        ['/addland', '/getlink'],
-        ['/deleteland']
-    ]).resize());
+  currentAction = null;
+  const buttons = {
+    reply_markup: {
+      keyboard: [['/addland'], ['/getlink'], ['/deleteland']],
+      resize_keyboard: true,
+      one_time_keyboard: false,
+    },
+  };
+  ctx.reply('Выберите действие:', buttons);
 });
 
 bot.command('addland', (ctx) => {
-    userState.set(ctx.chat.id, 'awaiting_name');
-    ctx.reply('Как называется ленд?', cancelButton());
+  ctx.reply('Как называется ленд?');
+  currentAction = 'addland_name';
 });
 
 bot.command('getlink', (ctx) => {
-    userState.set(ctx.chat.id, 'awaiting_domain');
-    ctx.reply('Отправьте домен:', cancelButton());
+  ctx.reply('Отправьте домен (например, https://site.com)');
+  currentAction = 'getlink';
 });
 
 bot.command('deleteland', (ctx) => {
-    const data = loadData();
-    const keys = Object.keys(data);
-    if (keys.length === 0) return ctx.reply('База пуста.');
-
-    const keyboard = keys.map(name => [Markup.button.text(name)]);
-    keyboard.push([Markup.button.text('❌ Отмена')]);
-    userState.set(ctx.chat.id, 'deleting');
-    ctx.reply('Выберите ленд для удаления:', Markup.keyboard(keyboard).resize());
+  const names = Object.keys(lands);
+  if (names.length === 0) return ctx.reply('База пуста.');
+  const buttons = names.map((name) => [{ text: name }]);
+  ctx.reply('Выберите ленд для удаления:', {
+    reply_markup: {
+      keyboard: buttons.concat([['Отмена']]),
+      resize_keyboard: true,
+      one_time_keyboard: true,
+    },
+  });
+  currentAction = 'delete';
 });
 
 bot.on('text', (ctx) => {
-    const state = userState.get(ctx.chat.id);
-    const text = ctx.message.text;
+  const text = ctx.message.text;
 
-    if (text === '❌ Отмена') {
-        userState.delete(ctx.chat.id);
-        tempData.delete(ctx.chat.id);
-        return ctx.reply('Действие отменено.', Markup.removeKeyboard());
+  if (currentAction === 'addland_name') {
+    tempName = text;
+    ctx.reply('Отправь мне хвост лендинга');
+    currentAction = 'addland_tail';
+  } else if (currentAction === 'addland_tail') {
+    lands[tempName] = text;
+    ctx.reply(`Ленд '${tempName}' добавлен!`);
+    currentAction = null;
+  } else if (currentAction === 'getlink') {
+    let domain = text.endsWith('/') ? text.slice(0, -1) : text;
+    if (!domain.startsWith('http')) domain = 'https://' + domain;
+    let response = '';
+    for (const [name, path] of Object.entries(lands)) {
+      const url = `${domain}${path}`;
+      response += `\`${name}\` - \`${url}\`\n\n`;
     }
-
-    if (state === 'awaiting_name') {
-        tempData.set(ctx.chat.id, { name: text });
-        userState.set(ctx.chat.id, 'awaiting_tail');
-        return ctx.reply('Отправь мне хвост лендинга:', cancelButton());
+    ctx.replyWithMarkdownV2(response.trim());
+    currentAction = null;
+  } else if (currentAction === 'delete') {
+    if (text === 'Отмена') {
+      ctx.reply('Удаление отменено.');
+    } else if (lands[text]) {
+      delete lands[text];
+      ctx.reply(`Ленд '${text}' удалён.`);
+    } else {
+      ctx.reply('Такого ленда нет.');
     }
-
-    if (state === 'awaiting_tail') {
-        const { name } = tempData.get(ctx.chat.id);
-        const data = loadData();
-        data[name] = text;
-        saveData(data);
-        userState.delete(ctx.chat.id);
-        tempData.delete(ctx.chat.id);
-        return ctx.reply(`Ленд "${name}" сохранён ✅`, Markup.removeKeyboard());
-    }
-
-    if (state === 'awaiting_domain') {
-        const domain = text.replace(/\/$/, '');
-        const data = loadData();
-        if (Object.keys(data).length === 0) return ctx.reply('База пуста.');
-
-        const reply = Object.entries(data).map(([name, tail]) => 
-            `${name} - ${domain}${tail}`
-        ).join('\n\n');
-
-        userState.delete(ctx.chat.id);
-        return ctx.reply(reply, Markup.removeKeyboard());
-    }
-
-    if (state === 'deleting') {
-        const data = loadData();
-        if (data[text]) {
-            delete data[text];
-            saveData(data);
-            userState.delete(ctx.chat.id);
-            return ctx.reply(`Ленд "${text}" удалён ✅`, Markup.removeKeyboard());
-        } else {
-            return ctx.reply('Такого ленда нет.');
-        }
-    }
+    currentAction = null;
+  }
 });
 
-function cancelButton() {
-    return Markup.keyboard([['❌ Отмена']]).resize();
-}
-
-// Пингер для Render
+// Пингер, чтобы Render не засыпал
 setInterval(() => {
-    axios.get('https://bot1win.onrender.com') // можно заменить на свой Render URL
-        .then(() => console.log('Пинг...'))
-        .catch(() => console.log('Пинг не удался'));
-}, 5 * 60 * 1000); // каждые 5 минут
+  axios.get(process.env.PING_URL || 'https://render.com');
+}, 4 * 60 * 1000);
 
+app.get('/', (_, res) => res.send('Бот работает!'));
+app.listen(process.env.PORT || 3000, () => console.log('Сервер запущен'));
 bot.launch();
-console.log('Бот запущен');
