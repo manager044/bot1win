@@ -105,7 +105,7 @@ function cancelButton() {
 
 // Пингер для Render
 setInterval(() => {
-    axios.get('https://render.com') // можно заменить на свой Render URL
+    axios.get('https://bot1win.onrender.com') // можно заменить на свой Render URL
         .then(() => console.log('Пинг...'))
         .catch(() => console.log('Пинг не удался'));
 }, 5 * 60 * 1000); // каждые 5 минут
