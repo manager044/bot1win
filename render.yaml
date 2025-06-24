@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: telegram-js-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: BOT_TOKEN
+        value: 7974469546:AAE1GfJKvHlMxTz1_PTwkKsZcLsQZBsywh8
