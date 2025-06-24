@@ -94,7 +94,7 @@ bot.on('text', (ctx) => {
     for (const [name, path] of Object.entries(lands)) {
       const safeName = escapeMarkdown(name);
       const safeURL = escapeMarkdown(domain + path);
-      response += `\`${safeName}\` - \`${safeURL}\`\n\n`;
+      response += `\`${safeName}\`\n\`${safeURL}\`\n\n`;
     }
     ctx.replyWithMarkdownV2(response.trim());
     currentAction = null;
