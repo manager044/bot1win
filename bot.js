@@ -9,6 +9,19 @@ const lands = {};
 let currentAction = null;
 let tempName = '';
 
+function escapeMarkdown(text) {
+  return text
+    .replace(/[-_.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/`/g, '\\`')
+    .replace(/\./g, '\\.')
+    .replace(/!/g, '\\!')
+    .replace(/=/g, '\\=')
+    .replace(/&/g, '\\&')
+    .replace(/\//g, '\\/')
+    .replace(/:/g, '\\:')
+    .replace(/\?/g, '\\?');
+}
+
 bot.start((ctx) => {
   currentAction = null;
   const buttons = {
@@ -27,7 +40,7 @@ bot.command('addland', (ctx) => {
 });
 
 bot.command('getlink', (ctx) => {
-  ctx.reply('Отправьте домен');
+  ctx.reply('Отправьте домен (например, https://site.com)');
   currentAction = 'getlink';
 });
 
@@ -61,8 +74,9 @@ bot.on('text', (ctx) => {
     if (!domain.startsWith('http')) domain = 'https://' + domain;
     let response = '';
     for (const [name, path] of Object.entries(lands)) {
-      const url = `${domain}${path}`;
-      response += `\`${name}\` - \`${url}\`\n\n`;
+      const safeName = escapeMarkdown(name);
+      const safeURL = escapeMarkdown(domain + path);
+      response += `\`${safeName}\` - \`${safeURL}\`\n\n`;
     }
     ctx.replyWithMarkdownV2(response.trim());
     currentAction = null;
@@ -79,7 +93,7 @@ bot.on('text', (ctx) => {
   }
 });
 
-// Пингер, чтобы Render не засыпал
+// Пингер
 setInterval(() => {
   axios.get(process.env.PING_URL || 'https://render.com');
 }, 4 * 60 * 1000);
