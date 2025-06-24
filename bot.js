@@ -1,17 +1,29 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 const express = require('express');
+const fs = require('fs');
 const app = express();
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const lands = {};
+const DATA_FILE = './lands.json';
+let lands = {};
 
-let currentAction = null;
-let tempName = '';
+// Загрузка лендов из файла
+function loadLands() {
+  if (fs.existsSync(DATA_FILE)) {
+    const raw = fs.readFileSync(DATA_FILE);
+    lands = JSON.parse(raw);
+  }
+}
+
+// Сохранение лендов в файл
+function saveLands() {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(lands, null, 2));
+}
 
 function escapeMarkdown(text) {
   return text
-    .replace(/[-_.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/[-_.*+?^${}()|[\\]\\]/g, '\\$&')
     .replace(/`/g, '\\`')
     .replace(/\./g, '\\.')
     .replace(/!/g, '\\!')
@@ -21,6 +33,11 @@ function escapeMarkdown(text) {
     .replace(/:/g, '\\:')
     .replace(/\?/g, '\\?');
 }
+
+loadLands();
+
+let currentAction = null;
+let tempName = '';
 
 bot.start((ctx) => {
   currentAction = null;
@@ -40,7 +57,7 @@ bot.command('addland', (ctx) => {
 });
 
 bot.command('getlink', (ctx) => {
-  ctx.reply('Отправьте домен');
+  ctx.reply('Отправьте домен (например, https://site.com)');
   currentAction = 'getlink';
 });
 
@@ -67,6 +84,7 @@ bot.on('text', (ctx) => {
     currentAction = 'addland_tail';
   } else if (currentAction === 'addland_tail') {
     lands[tempName] = text;
+    saveLands();
     ctx.reply(`Ленд '${tempName}' добавлен!`);
     currentAction = null;
   } else if (currentAction === 'getlink') {
@@ -85,6 +103,7 @@ bot.on('text', (ctx) => {
       ctx.reply('Удаление отменено.');
     } else if (lands[text]) {
       delete lands[text];
+      saveLands();
       ctx.reply(`Ленд '${text}' удалён.`);
     } else {
       ctx.reply('Такого ленда нет.');
