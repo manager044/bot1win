@@ -57,7 +57,7 @@ bot.command('addland', (ctx) => {
 });
 
 bot.command('getlink', (ctx) => {
-  ctx.reply('Отправьте домен (например, https://site.com)');
+  ctx.reply('Отправьте домен');
   currentAction = 'getlink';
 });
 
